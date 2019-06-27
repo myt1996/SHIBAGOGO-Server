@@ -5,10 +5,10 @@ import qrcode
 from django import forms
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 
-from game.models import APPUser, Pet
+from game.models import APPUser, Pet, Friend, Quest, Place
 
 # Create your views here.
 
@@ -41,12 +41,12 @@ def registration(request):
         # Here wo dont check the password because we hope client will do this
         user = User.objects.create_user(username, username, password)
         # Create QRCode for this user
-        qr_str = "shiba://user/{}".format(username)
-        qr_image = qrcode.make(qr_str)
-        qr_save_path = "Data/QR/{}.png".format(username)
-        qr_image.save(qr_save_path)
+        # qr_str = "shiba://user/{}".format(username)
+        # qr_image = qrcode.make(qr_str)
+        # qr_save_path = "Data/QR/{}.png".format(username)
+        # qr_image.save(qr_save_path)
         # Also create app_user with created user and QRCode
-        app_user = APPUser(user=user, qr=qr_save_path)
+        app_user = APPUser(user=user)
         app_user.save()
         return HttpResponse("Success.")
     else:
@@ -106,3 +106,94 @@ def json_from_request(request):
     else:
         #print("Request method is {} but POST expected".format(request.method))
         return None
+
+# PetLevel only GET
+def pet_level(request):
+    if request.user.is_authenticated and request.method == 'GET':
+        level = Pet.objects.get(user=request.user).level
+        return HttpResponse(str(level))
+    else:
+        return HttpResponse("Wrong request", status=400)
+
+# FriendList only GET
+def friend_list(request):
+    # if request.user.is_authenticated and 
+    if request.method == 'GET':
+        try:
+            token = request.GET["token"]
+        except:
+            return HttpResponse("Wrong request", status=400)
+        try:
+            app_user = APPUser.objects.get(token=token)
+            user = User.objects.get(APPUser=app_user)
+        except:
+            return HttpResponse("Wrong token", status=401)
+        friends_query = Friend.objects.filter(user=user)
+
+        friends = []
+        for f in friends_query:
+            end_user = f.friend
+            end_user_pet_level = level = Pet.objects.get(user=end_user).level
+            end_username = f.username
+            end_user_image = APPUser.objects.get(user=end_user).end_user_image
+            friends.append([end_username, end_user_pet_level, end_user_image])
+        friends.sort(key=lambda tup: tup[1], reverse=True)
+        
+        friend_dicts = []
+        for f in friends:
+            dict = {}
+            dict["name"] = f[0]
+            dict["level"] = f[1]
+            dict["imagepath"] = f[2]
+            friend_dicts.append(dict)
+        
+        return JsonResponse(friend_dicts)
+    else:
+        return HttpResponse("Wrong request", status=400)
+
+# AddFriend only POST
+def add_friend(request):
+    if request.method == 'POST':
+        try:
+            token = request.GET["token"]
+            end_username = request.GET["friendname"]
+        except:
+            return HttpResponse("Wrong request", status=400)
+        try:
+            app_user = APPUser.objects.get(token=token)
+            user = User.objects.get(APPUser=app_user)
+            end_user = User.objects.get(username=end_username)
+        except:
+            return HttpResponse("Wrong token", status=401)
+        f = Friend(user=user, friend=end_user)
+        f.save()
+        return HttpResponse("Success")
+    else:
+        return HttpResponse("Wrong request", status=400)
+
+# QuestList only GET
+def friend_list(request):
+    # if request.user.is_authenticated and 
+    if request.method == 'GET':
+        try:
+            token = request.GET["token"]
+        except:
+            return HttpResponse("Wrong request", status=400)
+        try:
+            app_user = APPUser.objects.get(token=token)
+            user = User.objects.get(APPUser=app_user)
+        except:
+            return HttpResponse("Wrong token", status=401)
+        quests_query = Quest.objects.filter(user=user)
+
+        quests_dicts = []
+        for q in quests_query:
+            dict = {}
+            dict["misson"] = q.info
+            dict["date"] = q.end
+            dict["state"] = q.status
+            quests_dicts.append(dict)
+        
+        return JsonResponse(quests_dicts)
+    else:
+        return HttpResponse("Wrong request", status=400)
