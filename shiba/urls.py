@@ -19,12 +19,13 @@ from django.urls import path
 import game.views
 
 urlpatterns = [
-    path('QuestListJSON/', game.views.quest_list),
+    path("AddLocationLogJSON/", game.views.add_location_log),
+    path('QuestList/', game.views.quest_list),
     path('AddFriendJSON/', game.views.add_friend),
     path('FriendList/', game.views.friend_list),
     path('PetLevel/', game.views.pet_level),
-    path('Registration/', game.views.registration),
-    path('Login/', game.views.login),
+    path('RegistrationJSON/', game.views.registration),
+    path('LoginJSON/', game.views.login),
     path('JSON/', game.views.json_post),
     path('admin/', admin.site.urls),
 ]

@@ -34,8 +34,14 @@ class Place(models.Model):
     name = models.CharField(max_length=50, default="NonePlace")
     type = models.IntegerField(default=-1)
 
+class LocationLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, default=None, related_name="log_user")
+    time = models.DateTimeField()
+    place = models.ForeignKey(Place, on_delete=models.CASCADE, default=None, related_name="log_location")
+
 class Quest(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=None, related_name="quest_user")
+    name = models.CharField(max_length=20, default="QuestName")
     place = models.ForeignKey(Place, on_delete=models.CASCADE, default=None, related_name="quest_place")
     start = models.DateTimeField()
     end = models.DateTimeField()

@@ -9,7 +9,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 
 from game.models import APPUser, Pet, Friend, Quest, Place
-
+from django.views.decorators.csrf import csrf_exempt
 # Create your views here.
 
 # / for test
@@ -54,9 +54,10 @@ def index(request):
 #     else:
 #         return HttpResponse("Should post username and password for registration.", status=400)
 
-# Registration only POST, new version cannot past test now
+# RegistrationJSON only POST, new version cannot past test now
+@csrf_exempt
 def registration(request):
-    keys = ["userMailAddress", "userPassword", "userInitialInfo", "userImage"]
+    keys = ["userMailAddress", "userPassword", "userInitialInfo1", "userInitialInfo2", "userInitialInfo3", "userInitialInfo4", "userImage"]
     dict = json_from_request(request, "POST", keys)
     if dict:
         username = dict.get("userMailAddress")
@@ -64,37 +65,46 @@ def registration(request):
             return HttpResponse("Username has been used.")
 
         password = dict.get("userPassword")
-        info_raw = dict.get("userInitialInfo")
+        info_raw = (dict.get("userInitialInfo1"), dict.get("userInitialInfo2"), dict.get("userInitialInfo3"), dict.get("userInitialInfo4"))
         image_raw = dict.get("userImage")
-        user = User.objects.create_user(username, username, password)
-        # TODO create app_user
 
         # process info
         info = registration_info_process(info_raw)
         # process image
-        image = registration_image_process(image_raw)
+        image = registration_image_process(image_raw, username)
         # generate token
         token = token_generate(username)
+        user = User.objects.create_user(username, username, password)
         app_user = APPUser(user=user, info=info, image=image, token=token)
         app_user.save()
+        # generate pet
+        pet = Pet(user=user, name="Pet", level=1, status="Normal")
+        pet.save()
 
         return HttpResponse(token)
     else:
         return HttpResponse("JSON POST error.", status=400)
 
 def registration_info_process(info):
-    raise NotImplementedError
-def registration_image_process(image):
-    raise NotImplementedError
+    return int(info[0]*1000+info[1]*100+info[2]*10+info[3])
+def registration_image_process(image, username):
+    #import base64
+    #image_data = base64.decodebytes(image)
+    with open(username, "wt") as f:
+        f.write(image)
+    return username
 def token_generate(username):
     return username
 
-# Login only POST
+# LoginJSON only POST
+@csrf_exempt
 def login(request):
-    form = UserForm(request.POST, request.FILES)
-    if form.is_valid():
-        username = request.POST["username"]
-        password = request.POST["password"]
+    # form = UserForm(request.POST, request.FILES)
+    keys = ["userMailAddress", "userPassword"]
+    dict = json_from_request(request, "POST", keys)
+    if dict:
+        username = dict.get("userMailAddress")
+        password = dict.get("userPassword")
         user = authenticate(username=username, password=password)
         if user is not None:
             token = token_generate(username)
@@ -162,55 +172,57 @@ def json_from_request(request, method='POST', keys = []):
         return None
 
 # PetLevel only GET
+@csrf_exempt
 def pet_level(request):
     #if request.user.is_authenticated and request.method == 'GET':
-    form = TokenForm(request.GET, request.FILES)
-    if form.is_valid():
-        token = form["token"]
+    # form = TokenForm(request.GET, request.FILES)
+    # if form.is_valid():
+    try:
+        token = request.body.decode("utf-8")
         app_user = APPUser.objects.get(token=token)
         user = app_user.user
-        level = Pet.objects.get(user=user).level
-        return HttpResponse(str(level))
-    else:
-        return HttpResponse("Wrong request", status=400)
+    except:
+        return HttpResponse("Wrong token", status=401)
+    level = Pet.objects.get(user=user).level
+    return HttpResponse(str(level))
 
 # FriendList only GET
+@csrf_exempt
 def friend_list(request):
     # if request.user.is_authenticated and 
-    if request.method == 'GET':
-        try:
-            token = request.GET["token"]
-        except:
-            return HttpResponse("Wrong request", status=400)
-        try:
-            app_user = APPUser.objects.get(token=token)
-            user = User.objects.get(APPUser=app_user)
-        except:
-            return HttpResponse("Wrong token", status=401)
-        friends_query = Friend.objects.filter(user=user)
+    try:
+        token = request.body.decode("utf-8")
+        app_user = APPUser.objects.get(token=token)
+        user = app_user.user
+    except:
+        return HttpResponse("Wrong token", status=401)
+    friends_query = Friend.objects.filter(user=user)
 
-        friends = []
-        for f in friends_query:
-            end_user = f.friend
-            end_user_pet_level  = Pet.objects.get(user=end_user).level
-            end_username = f.username
-            end_user_image = APPUser.objects.get(user=end_user).end_user_image
-            friends.append([end_username, end_user_pet_level, end_user_image])
-        friends.sort(key=lambda tup: tup[1], reverse=True)
-        
-        friend_dicts = []
-        for f in friends:
-            dict = {}
-            dict["name"] = f[0]
-            dict["level"] = f[1]
-            dict["imagepath"] = f[2]
-            friend_dicts.append(dict)
-        
-        return JsonResponse(friend_dicts)
-    else:
-        return HttpResponse("Wrong request", status=400)
+    friends = []
+    for f in friends_query:
+        end_user = f.friend
+        end_user_pet_level  = Pet.objects.get(user=end_user).level
+        end_username = f.username
+        end_user_image = APPUser.objects.get(user=end_user).end_user_image
+        friends.append([end_username, end_user_pet_level, end_user_image])
+    friends.sort(key=lambda tup: tup[1], reverse=True)
+    
+    friend_dicts = []
+    ranking = 1
+    for f in friends:
+        dict = {}
+        dict["ranking"] = ranking
+        dict["name"] = f[0]
+        dict["level"] = f[1]
+        dict["imagepath"] = f[2]
+        friend_dicts.append(dict)
+        ranking += 1
+    json_str = json.dumps(friend_dicts)
+    
+    return HttpResponse(json_str)
 
 # AddFriend only POST
+@csrf_exempt
 def add_friend(request):
     keys = ["token", "friendname"]
     dict = json_from_request(request, 'POST', keys)
@@ -222,7 +234,7 @@ def add_friend(request):
             return HttpResponse("Wrong request", status=400)
         try:
             app_user = APPUser.objects.get(token=token)
-            user = User.objects.get(APPUser=app_user)
+            user = app_user.user
             end_user = User.objects.get(username=end_username)
         except:
             return HttpResponse("Wrong token", status=401)
@@ -233,28 +245,63 @@ def add_friend(request):
         return HttpResponse("Wrong request", status=400)
 
 # QuestList only GET
+@csrf_exempt
 def quest_list(request):
     # if request.user.is_authenticated and 
-    if request.method == 'GET':
+    try:
+        token = request.body.decode("utf-8")
+        app_user = APPUser.objects.get(token=token)
+        user = app_user.user
+    except:
+        return HttpResponse("Wrong token", status=401)
+
+    quests_query = Quest.objects.filter(user=user)
+
+    quests_dicts = []
+    for q in quests_query:
+        dict = {}
+        dict["misson"] = q.name
+        dict["date"] = q.end
+        dict["state"] = q.status
+        dict["content"] = q.info
+        dict["latitude"] = q.place.x
+        dict["longtitude"] = q.place.y
+        quests_dicts.append(dict)
+    json_str = json.dumps(quests_dicts)
+    
+    return HttpResponse(json_str)
+
+# AddLocationLog only POST
+@csrf_exempt
+def add_location_log(request):
+    keys = ["token", "timeLocationinfo"]
+    dict = json_from_request(request, 'POST', keys)
+    if dict:
         try:
-            token = request.GET["token"]
+            token = dict["token"]
+            time_locations = dict["timeLocationinfo"]
         except:
             return HttpResponse("Wrong request", status=400)
         try:
             app_user = APPUser.objects.get(token=token)
-            user = User.objects.get(APPUser=app_user)
+            user = app_user.user
         except:
             return HttpResponse("Wrong token", status=401)
-        quests_query = Quest.objects.filter(user=user)
 
-        quests_dicts = []
-        for q in quests_query:
-            dict = {}
-            dict["misson"] = q.info
-            dict["date"] = q.end
-            dict["state"] = q.status
-            quests_dicts.append(dict)
-        
-        return JsonResponse(quests_dicts)
+        for time_location in time_locations:
+            time = time_location["date"]
+            x = time_location["lat"]
+            y = time_location["lng"]
+
+            # Try to find real location here, now only create
+
+            place = Place(x=x, y=y, name="TEST", type=1)
+            place.save()
+
+            log = LocationLog(user=user, time=time, place=place)
+            log.save()
+
+        # Maybe try to add a quest to database here
+
     else:
         return HttpResponse("Wrong request", status=400)
