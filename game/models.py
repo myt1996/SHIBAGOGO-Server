@@ -33,6 +33,7 @@ class Place(models.Model):
     y = models.FloatField(default=0)
     name = models.CharField(max_length=50, default="NonePlace")
     type = models.IntegerField(default=-1)
+    info = models.TextField(default="NonePlaceInfo")
 
 class LocationLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=None, related_name="log_user")

@@ -295,7 +295,10 @@ def add_location_log(request):
 
             # Try to find real location here, now only create
 
-            place = Place(x=x, y=y, name="TEST", type=1)
+            from shiba_tools.place_api import find_place
+            place_info = find_place(x, y)
+
+            place = Place(x=x, y=y, name=place_info["name"], type=0, info=place_info)
             place.save()
 
             log = LocationLog(user=user, time=time, place=place)
