@@ -88,10 +88,10 @@ def registration(request):
 def registration_info_process(info):
     return int(info[0]*1000+info[1]*100+info[2]*10+info[3])
 def registration_image_process(image, username):
-    #import base64
-    #image_data = base64.decodebytes(image)
-    with open(username, "wt") as f:
-        f.write(image)
+    import base64
+    image_data = base64.b64decode(image)
+    with open(username+".png", "wb") as f:
+        f.write(image_data)
     return username
 def token_generate(username):
     return username
@@ -271,7 +271,7 @@ def quest_list(request):
     
     return HttpResponse(json_str)
 
-# AddLocationLog only POST
+# AddLocationLogJSON only POST
 @csrf_exempt
 def add_location_log(request):
     keys = ["token", "timeLocationinfo"]
@@ -308,3 +308,14 @@ def add_location_log(request):
 
     else:
         return HttpResponse("Wrong request", status=400)
+
+@csrf_exempt
+def get_image(request):
+    try:
+        username = request.body.decode("utf-8")
+        filename = username + ".png"
+        with open(filename, "rb") as f:
+            data = f.read()
+        return HttpResponse(data)
+    except:
+        return HttpResponse("Wrong username", status=401)
