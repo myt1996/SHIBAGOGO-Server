@@ -13,6 +13,8 @@ from django.views.decorators.csrf import csrf_exempt
 # Create your views here.
 
 # / for test
+
+
 def index(request):
     # users = User.objects.all()
     # for user in users:
@@ -39,7 +41,7 @@ def index(request):
 
 #         if User.objects.filter(username=username).exists():
 #             return HttpResponse("Username has been used.")
-    
+
 #         # Here wo dont check the password because we hope client will do this
 #         user = User.objects.create_user(username, username, password)
 #         # Create QRCode for this user
@@ -57,7 +59,8 @@ def index(request):
 # RegistrationJSON only POST, new version cannot past test now
 @csrf_exempt
 def registration(request):
-    keys = ["userMailAddress", "userPassword", "userInitialInfo1", "userInitialInfo2", "userInitialInfo3", "userInitialInfo4", "userImage"]
+    keys = ["userMailAddress", "userPassword", "userInitialInfo1",
+            "userInitialInfo2", "userInitialInfo3", "userInitialInfo4", "userImage"]
     dict = json_from_request(request, "POST", keys)
     if dict:
         username = dict.get("userMailAddress")
@@ -65,7 +68,8 @@ def registration(request):
             return HttpResponse("Username has been used.")
 
         password = dict.get("userPassword")
-        info_raw = (dict.get("userInitialInfo1"), dict.get("userInitialInfo2"), dict.get("userInitialInfo3"), dict.get("userInitialInfo4"))
+        info_raw = (dict.get("userInitialInfo1"), dict.get("userInitialInfo2"), dict.get(
+            "userInitialInfo3"), dict.get("userInitialInfo4"))
         image_raw = dict.get("userImage")
 
         # process info
@@ -85,14 +89,19 @@ def registration(request):
     else:
         return HttpResponse("JSON POST error.", status=400)
 
+
 def registration_info_process(info):
     return int(info[0]*1000+info[1]*100+info[2]*10+info[3])
+
+
 def registration_image_process(image, username):
     import base64
     image_data = base64.b64decode(image)
     with open(username+".png", "wb") as f:
         f.write(image_data)
     return username
+
+
 def token_generate(username):
     return username
 
@@ -114,6 +123,7 @@ def login(request):
     else:
         return HttpResponse("Should post username and password when login.", status=400)
 
+
 def json_post(request):
     dict = json_from_request(request)
     if dict:
@@ -130,17 +140,22 @@ def json_post(request):
     else:
         return HttpResponse("JSON POST error.", status=400)
 
+
 def test_bool_function(dict):
     if "test_bool" in dict.keys() and isinstance(dict["test_bool"], bool):
         return dict["test_bool"]
     else:
         return False
 
+
 class UserForm(forms.Form):
     username = forms.CharField()
     password = forms.CharField()
+
+
 class TokenForm(forms.Form):
     token = forms.CharField()
+
 
 '''
     args:
@@ -151,7 +166,9 @@ class TokenForm(forms.Form):
         None if request dont meet necessary
         dict otherwise
 '''
-def json_from_request(request, method='POST', keys = []):
+
+
+def json_from_request(request, method='POST', keys=[]):
     if request.method == method:
         try:
             dict = json.loads(request.body)
@@ -174,7 +191,7 @@ def json_from_request(request, method='POST', keys = []):
 # PetLevel only GET
 @csrf_exempt
 def pet_level(request):
-    #if request.user.is_authenticated and request.method == 'GET':
+    # if request.user.is_authenticated and request.method == 'GET':
     # form = TokenForm(request.GET, request.FILES)
     # if form.is_valid():
     try:
@@ -189,7 +206,7 @@ def pet_level(request):
 # FriendList only GET
 @csrf_exempt
 def friend_list(request):
-    # if request.user.is_authenticated and 
+    # if request.user.is_authenticated and
     try:
         token = request.body.decode("utf-8")
         app_user = APPUser.objects.get(token=token)
@@ -201,12 +218,12 @@ def friend_list(request):
     friends = []
     for f in friends_query:
         end_user = f.friend
-        end_user_pet_level  = Pet.objects.get(user=end_user).level
-        end_username = f.username
-        end_user_image = APPUser.objects.get(user=end_user).end_user_image
+        end_user_pet_level = Pet.objects.get(user=end_user).level
+        end_username = end_user.username
+        end_user_image = APPUser.objects.get(user=end_user).image
         friends.append([end_username, end_user_pet_level, end_user_image])
     friends.sort(key=lambda tup: tup[1], reverse=True)
-    
+
     friend_dicts = []
     ranking = 1
     for f in friends:
@@ -218,7 +235,7 @@ def friend_list(request):
         friend_dicts.append(dict)
         ranking += 1
     json_str = json.dumps(friend_dicts)
-    
+
     return HttpResponse(json_str)
 
 # AddFriend only POST
@@ -244,10 +261,33 @@ def add_friend(request):
     else:
         return HttpResponse("Wrong request", status=400)
 
+
+QUEST_STATUS = {0: "Completed", 1: "On going", 2: "Out of data"}
+QUEST_DATA_FORMAT = 'End at %Y-%m-%d %H:%M:%S'
+
+
+def check_quest_status(pk, out_date, cur_date):
+    if out_date < cur_date:
+        status = 2
+    else:
+        status = 1
+    Quest.objects.filter(pk=pk).update(status=status)
+
+# TODO use this method to check if user has finished one quest and change the status
+
+
+def check_quest_completed(user):
+    raise NotImplementedError
+# TODO use this method to set a new quest from location logs
+
+
+def set_new_quest(user):
+    raise NotImplementedError
+
 # QuestList only GET
 @csrf_exempt
 def quest_list(request):
-    # if request.user.is_authenticated and 
+    # if request.user.is_authenticated and
     try:
         token = request.body.decode("utf-8")
         app_user = APPUser.objects.get(token=token)
@@ -260,16 +300,36 @@ def quest_list(request):
     quests_dicts = []
     for q in quests_query:
         dict = {}
-        dict["misson"] = q.name
-        dict["date"] = q.end
-        dict["state"] = q.status
+        dict["mission"] = q.name
+        from datetime import datetime
+        dict["date"] = (datetime.now() + timedelta(days=1)
+                        ).strftime(QUEST_DATA_FORMAT)
+        dict["state"] = QUEST_STATUS[q.status]
         dict["content"] = q.info
         dict["latitude"] = q.place.x
         dict["longtitude"] = q.place.y
         quests_dicts.append(dict)
     json_str = json.dumps(quests_dicts)
-    
+
     return HttpResponse(json_str)
+
+# QuestCount only GET
+@csrf_exempt
+def quest_count(request):
+    try:
+        token = request.body.decode("utf-8")
+        app_user = APPUser.objects.get(token=token)
+        user = app_user.user
+    except:
+        return HttpResponse("Wrong token", status=401)
+
+    quests_query = Quest.objects.filter(user=user)
+    count = 0
+    for q in quests_query:
+        if q.status == 1:
+            count += 1
+
+    return HttpResponse(str(count))
 
 # AddLocationLogJSON only POST
 @csrf_exempt
@@ -298,7 +358,8 @@ def add_location_log(request):
             from shiba_tools.place_api import find_place
             place_info = find_place(x, y)
 
-            place = Place(x=x, y=y, name=place_info["name"], type=0, info=place_info)
+            place = Place(
+                x=x, y=y, name=place_info["name"], type=0, info=place_info)
             place.save()
 
             log = LocationLog(user=user, time=time, place=place)
@@ -309,8 +370,9 @@ def add_location_log(request):
     else:
         return HttpResponse("Wrong request", status=400)
 
+# UserImage only GET
 @csrf_exempt
-def get_image(request):
+def user_image(request):
     try:
         username = request.body.decode("utf-8")
         filename = username + ".png"

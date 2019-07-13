@@ -19,6 +19,8 @@ from django.urls import path
 import game.views
 
 urlpatterns = [
+    path("QuestCount/", game.views.quest_count),
+    path("UserImage/", game.views.user_image),
     path("AddLocationLogJSON/", game.views.add_location_log),
     path('QuestList/', game.views.quest_list),
     path('AddFriendJSON/', game.views.add_friend),

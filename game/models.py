@@ -3,14 +3,17 @@ from django.contrib.auth.models import User
 
 # Create your models here.
 
+
 class APPUser(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, default=None, related_name="app_user")
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, default=None, related_name="app_user")
     info = models.IntegerField(default=0)
     image = models.CharField(max_length=30, default="Data/no_image.png")
     token = models.CharField(max_length=50, default="NoneUser")
 
     def __str__(self):
         return "user{}".format(self.user.username)
+
 
 class Pet(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=None)
@@ -21,12 +24,16 @@ class Pet(models.Model):
     def __str__(self):
         return "{}_pet{}".format(self.user, self.name)
 
+
 class Friend(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, default=None, related_name="friend_start_user")
-    friend = models.ForeignKey(User, on_delete=models.CASCADE, default=None, related_name="friend_end_user")
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, default=None, related_name="friend_start_user")
+    friend = models.ForeignKey(
+        User, on_delete=models.CASCADE, default=None, related_name="friend_end_user")
 
     def __str__(self):
         return "{}_and_{}_friend".format(self.user, self.friend)
+
 
 class Place(models.Model):
     x = models.FloatField(default=0)
@@ -35,15 +42,21 @@ class Place(models.Model):
     type = models.IntegerField(default=-1)
     info = models.TextField(default="NonePlaceInfo")
 
+
 class LocationLog(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, default=None, related_name="log_user")
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, default=None, related_name="log_user")
     time = models.DateTimeField()
-    place = models.ForeignKey(Place, on_delete=models.CASCADE, default=None, related_name="log_location")
+    place = models.ForeignKey(
+        Place, on_delete=models.CASCADE, default=None, related_name="log_location")
+
 
 class Quest(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, default=None, related_name="quest_user")
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, default=None, related_name="quest_user")
     name = models.CharField(max_length=20, default="QuestName")
-    place = models.ForeignKey(Place, on_delete=models.CASCADE, default=None, related_name="quest_place")
+    place = models.ForeignKey(
+        Place, on_delete=models.CASCADE, default=None, related_name="quest_place")
     start = models.DateTimeField()
     end = models.DateTimeField()
     status = models.IntegerField(default=-1)
