@@ -1,62 +1,26 @@
-# For json reuqest
+import base64
 import json
+import os
+from datetime import datetime, timedelta
 
-import qrcode
+import numpy as np
 from django import forms
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
-
-from game.models import APPUser, Pet, Friend, Quest, Place
 from django.views.decorators.csrf import csrf_exempt
-# Create your views here.
+from pytz import timezone
 
-# / for test
+from game.models import APPUser, Friend, LocationLog, Pet, Place, Quest
+from shiba_tools.place_api import find_place
+from shiba_tools.suisen import recommend_system
 
 
 def index(request):
-    # users = User.objects.all()
-    # for user in users:
-    #     user.delete()
-    # # user create test
-    # User.objects.create_user(username="myt", email="mytemail", password="123456")
-    # # user get test
-    # APPUser.objects.create(user=myt_user)
-    # myt_appuser = myt_user.app_user
-    # # pet create test
-    # Pet.objects.create(user=myt_appuser, name="mytpet", level=100, status="Normal")
-    # # pet get test
-    # myt_pet = Pet.objects.get(user=myt_appuser)
-    # # delete test
-    # myt_appuser.delete()
     return HttpResponse("Hello, world. You're at the pet index. Only for test.")
 
-# Old version
-# def registration(request):
-#     form = UserForm(request.POST, request.FILES)
-#     if form.is_valid():
-#         username = request.POST["username"]
-#         password = request.POST["password"]
-
-#         if User.objects.filter(username=username).exists():
-#             return HttpResponse("Username has been used.")
-
-#         # Here wo dont check the password because we hope client will do this
-#         user = User.objects.create_user(username, username, password)
-#         # Create QRCode for this user
-#         # qr_str = "shiba://user/{}".format(username)
-#         # qr_image = qrcode.make(qr_str)
-#         # qr_save_path = "Data/QR/{}.png".format(username)
-#         # qr_image.save(qr_save_path)
-#         # Also create app_user with created user and QRCode
-#         app_user = APPUser(user=user)
-#         app_user.save()
-#         return HttpResponse("Success.")
-#     else:
-#         return HttpResponse("Should post username and password for registration.", status=400)
-
-# RegistrationJSON only POST, new version cannot past test now
+# RegistrationJSON
 @csrf_exempt
 def registration(request):
     keys = ["userMailAddress", "userPassword", "userInitialInfo1",
@@ -93,22 +57,18 @@ def registration(request):
 def registration_info_process(info):
     return int(info[0]*1000+info[1]*100+info[2]*10+info[3])
 
-
 def registration_image_process(image, username):
-    import base64
     image_data = base64.b64decode(image)
     with open(username+".png", "wb") as f:
         f.write(image_data)
     return username
 
-
 def token_generate(username):
     return username
 
-# LoginJSON only POST
+# LoginJSON 
 @csrf_exempt
 def login(request):
-    # form = UserForm(request.POST, request.FILES)
     keys = ["userMailAddress", "userPassword"]
     dict = json_from_request(request, "POST", keys)
     if dict:
@@ -124,39 +84,6 @@ def login(request):
         return HttpResponse("Should post username and password when login.", status=400)
 
 
-def json_post(request):
-    dict = json_from_request(request)
-    if dict:
-        method_str = dict["method"]
-        if method_str in globals():
-            method = globals()[method_str]
-            return_value = method(dict)
-            if return_value == True:
-                return HttpResponse("Success.")
-            else:
-                return HttpResponse("Failed.")
-        else:
-            return HttpResponse("JSON POST error.", status=400)
-    else:
-        return HttpResponse("JSON POST error.", status=400)
-
-
-def test_bool_function(dict):
-    if "test_bool" in dict.keys() and isinstance(dict["test_bool"], bool):
-        return dict["test_bool"]
-    else:
-        return False
-
-
-class UserForm(forms.Form):
-    username = forms.CharField()
-    password = forms.CharField()
-
-
-class TokenForm(forms.Form):
-    token = forms.CharField()
-
-
 '''
     args:
         request, should be a json request
@@ -166,8 +93,6 @@ class TokenForm(forms.Form):
         None if request dont meet necessary
         dict otherwise
 '''
-
-
 def json_from_request(request, method='POST', keys=[]):
     if request.method == method:
         try:
@@ -188,12 +113,9 @@ def json_from_request(request, method='POST', keys=[]):
         #print("Request method is {} but POST expected".format(request.method))
         return None
 
-# PetLevel only GET
+# PetLevel  
 @csrf_exempt
 def pet_level(request):
-    # if request.user.is_authenticated and request.method == 'GET':
-    # form = TokenForm(request.GET, request.FILES)
-    # if form.is_valid():
     try:
         token = request.body.decode("utf-8")
         app_user = APPUser.objects.get(token=token)
@@ -203,10 +125,9 @@ def pet_level(request):
     level = Pet.objects.get(user=user).level
     return HttpResponse(str(level))
 
-# FriendList only GET
+# FriendList  
 @csrf_exempt
 def friend_list(request):
-    # if request.user.is_authenticated and
     try:
         token = request.body.decode("utf-8")
         app_user = APPUser.objects.get(token=token)
@@ -238,7 +159,7 @@ def friend_list(request):
 
     return HttpResponse(json_str)
 
-# AddFriend only POST
+# AddFriend 
 @csrf_exempt
 def add_friend(request):
     keys = ["token", "friendname"]
@@ -273,21 +194,26 @@ def check_quest_status(pk, out_date, cur_date):
         status = 1
     Quest.objects.filter(pk=pk).update(status=status)
 
-# TODO use this method to check if user has finished one quest and change the status
-
-
 def check_quest_completed(user):
     raise NotImplementedError
-# TODO use this method to set a new quest from location logs
-
 
 def set_new_quest(user):
-    raise NotImplementedError
+    data_recoder = np.load(os.path.join( os.getcwd(), "data_recoder.npy"))
+    time_recoder = np.load(os.path.join( os.getcwd(), "time_recoder.npy"))
+    rs = recommend_system(time_recoder, data_recoder)
+    place_index = rs.suggest_place #.recommend()
 
-# QuestList only GET
+    zahyou_index_ls = [[34.992662, 135.952072], [34.979477, 135.964416], [35.003617, 135.951241],
+                       [34.995388, 135.952798], [34.981981, 135.962519]]
+    x, y = zahyou_index_ls[int(place_index)]
+    place = Place.objects.get(x=x, y=y)
+    name = "Go to {}".format(place.name)
+    quest = Quest(user=user, name=name, place=place, start=datetime.now(), end=datetime.now()+timedelta(days=1), status=1, info=name)
+    quest.save()
+
+# QuestList  
 @csrf_exempt
 def quest_list(request):
-    # if request.user.is_authenticated and
     try:
         token = request.body.decode("utf-8")
         app_user = APPUser.objects.get(token=token)
@@ -301,7 +227,6 @@ def quest_list(request):
     for q in quests_query:
         dict = {}
         dict["mission"] = q.name
-        from datetime import datetime
         dict["date"] = (datetime.now() + timedelta(days=1)
                         ).strftime(QUEST_DATA_FORMAT)
         dict["state"] = QUEST_STATUS[q.status]
@@ -313,7 +238,7 @@ def quest_list(request):
 
     return HttpResponse(json_str)
 
-# QuestCount only GET
+# QuestCount  
 @csrf_exempt
 def quest_count(request):
     try:
@@ -331,7 +256,7 @@ def quest_count(request):
 
     return HttpResponse(str(count))
 
-# AddLocationLogJSON only POST
+# AddLocationLogJSON 
 @csrf_exempt
 def add_location_log(request):
     keys = ["token", "timeLocationinfo"]
@@ -348,34 +273,43 @@ def add_location_log(request):
         except:
             return HttpResponse("Wrong token", status=401)
 
+        # if time_locations == "":
+        #     with open(os.path.join( os.getcwd(), "location_log.json"), "r") as f:
+        #         json_str = f.read()
+        #     time_locations = json.loads(json_str)
+
+        JST = timezone('Asia/Tokyo')
+
         for time_location in time_locations:
-            time = time_location["date"]
+            time = datetime.fromtimestamp(time_location["date"], JST)
             x = time_location["lat"]
             y = time_location["lng"]
 
-            # Try to find real location here, now only create
-
-            from shiba_tools.place_api import find_place
-            place_info = find_place(x, y)
-
-            place = Place(
-                x=x, y=y, name=place_info["name"], type=0, info=place_info)
-            place.save()
+            try:
+                place_query = Place.objects.filter(x=x, y=y)
+                place = place_query[0]
+            except:
+                place = place
+                # Save google map api cost
+                # place_info = find_place(x, y)
+                # place = Place(
+                #     x=x, y=y, name=place_info["name"], type=0, info=place_info)
+                # place.save()
 
             log = LocationLog(user=user, time=time, place=place)
             log.save()
 
-        # Maybe try to add a quest to database here
-
+        set_new_quest(user)
+        return HttpResponse("Success")
     else:
         return HttpResponse("Wrong request", status=400)
 
-# UserImage only GET
+# UserImage  
 @csrf_exempt
 def user_image(request):
     try:
         username = request.body.decode("utf-8")
-        filename = username + ".png"
+        filename = os.path.join( os.getcwd(), "data", username+".png" )
         with open(filename, "rb") as f:
             data = f.read()
         return HttpResponse(data)
