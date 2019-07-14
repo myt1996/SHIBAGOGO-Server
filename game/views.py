@@ -59,7 +59,8 @@ def registration_info_process(info):
 
 def registration_image_process(image, username):
     image_data = base64.b64decode(image)
-    with open(username+".png", "wb") as f:
+    filename = os.path.join( os.getcwd(), "data", username+".png" )
+    with open(filename, "wb") as f:
         f.write(image_data)
     return username
 
@@ -198,8 +199,8 @@ def check_quest_completed(user):
     raise NotImplementedError
 
 def set_new_quest(user):
-    data_recoder = np.load(os.path.join( os.getcwd(), "data_recoder.npy"))
-    time_recoder = np.load(os.path.join( os.getcwd(), "time_recoder.npy"))
+    data_recoder = np.load(os.path.join( os.getcwd(), "data", "data_recoder.npy"))
+    time_recoder = np.load(os.path.join( os.getcwd(), "data", "time_recoder.npy"))
     rs = recommend_system(time_recoder, data_recoder)
     place_index = rs.suggest_place #.recommend()
 
@@ -274,7 +275,7 @@ def add_location_log(request):
             return HttpResponse("Wrong token", status=401)
 
         # if time_locations == "":
-        #     with open(os.path.join( os.getcwd(), "location_log.json"), "r") as f:
+        #     with open(os.path.join( os.getcwd(), "data", "location_log.json"), "r") as f:
         #         json_str = f.read()
         #     time_locations = json.loads(json_str)
 
@@ -307,6 +308,39 @@ def add_location_log(request):
 # UserImage  
 @csrf_exempt
 def user_image(request):
+    try:
+        username = request.body.decode("utf-8")
+        filename = os.path.join( os.getcwd(), "data", username+".png" )
+        with open(filename, "rb") as f:
+            data = f.read()
+        return HttpResponse(data)
+    except:
+        return HttpResponse("Wrong username", status=401)
+
+# NewImage  
+@csrf_exempt
+def new_image(request):
+    keys = ["token", "Newimage"]
+    dict = json_from_request(request, 'POST', keys)
+    if dict:
+        try:
+            token = dict["token"]
+            image_raw = dict["Newimage"]
+        except:
+            return HttpResponse("Wrong request", status=400)
+        try:
+            app_user = APPUser.objects.get(token=token)
+            user = app_user.user
+        except:
+            return HttpResponse("Wrong token", status=401)
+        
+        username = user.username
+        image = registration_image_process(image_raw, username)
+        app_user.image = image
+        app_user.save()
+
+        return HttpResponse("Success")
+
     try:
         username = request.body.decode("utf-8")
         filename = os.path.join( os.getcwd(), "data", username+".png" )
