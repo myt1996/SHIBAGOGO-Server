@@ -1,7 +1,7 @@
 import urllib.request
 import json
 
-myt_api_key = "AIzaSyC9Dnt3CPN-jb9GeLBiajk9IPwlz0S9wOs"
+myt_api_key = "Replace_your_api_here"
 url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={x},{y}&radius={r}&key={key}"
 
 

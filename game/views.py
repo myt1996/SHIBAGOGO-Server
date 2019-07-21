@@ -17,9 +17,57 @@ from shiba_tools.place_api import find_place
 from shiba_tools.suisen import recommend_system
 
 
+'''
+    args:
+        request, should be a json request
+        method, method allowed, POST or GET
+        keys, request json should contains thest keys
+    return:
+        None if request dont meet necessary
+        dict otherwise
+'''
+def json_from_request(request, method='POST', keys=[]):
+    if request.method == method:
+        try:
+            dict = json.loads(request.body)
+            # if "method" in dict.keys() and dict["method"] is not None:
+            #     return dict
+            # else:
+            #     #print("JSON request must contain a 'method' key")
+            #     return None
+            for key in keys:
+                if key not in dict.keys():
+                    return None
+            return dict
+        except:
+            #print("{} is not a JSON request".format(request.body.decode("utf-8")))
+            return None
+    else:
+        #print("Request method is {} but POST expected".format(request.method))
+        return None
+
+'''
+    Test part
+'''
 def index(request):
     return HttpResponse("Hello, world. You're at the pet index. Only for test.")
 
+'''
+    User unit part
+'''
+def registration_info_process(info):
+    return int(info[0]*1000+info[1]*100+info[2]*10+info[3])
+
+def registration_image_process(image, username):
+    image_data = base64.b64decode(image)
+    filename = os.path.join( os.getcwd(), "data", username+".png" )
+    with open(filename, "wb") as f:
+        f.write(image_data)
+    return username
+
+def token_generate(username):
+    return username
+    
 # RegistrationJSON
 @csrf_exempt
 def registration(request):
@@ -53,20 +101,6 @@ def registration(request):
     else:
         return HttpResponse("JSON POST error.", status=400)
 
-
-def registration_info_process(info):
-    return int(info[0]*1000+info[1]*100+info[2]*10+info[3])
-
-def registration_image_process(image, username):
-    image_data = base64.b64decode(image)
-    filename = os.path.join( os.getcwd(), "data", username+".png" )
-    with open(filename, "wb") as f:
-        f.write(image_data)
-    return username
-
-def token_generate(username):
-    return username
-
 # LoginJSON 
 @csrf_exempt
 def login(request):
@@ -84,36 +118,54 @@ def login(request):
     else:
         return HttpResponse("Should post username and password when login.", status=400)
 
+# UserImage  
+@csrf_exempt
+def user_image(request):
+    try:
+        username = request.body.decode("utf-8")
+        filename = os.path.join( os.getcwd(), "data", username+".png" )
+        with open(filename, "rb") as f:
+            data = f.read()
+        return HttpResponse(data)
+    except:
+        return HttpResponse("Wrong username", status=401)
 
-'''
-    args:
-        request, should be a json request
-        method, method allowed, POST or GET
-        keys, request json should contains thest keys
-    return:
-        None if request dont meet necessary
-        dict otherwise
-'''
-def json_from_request(request, method='POST', keys=[]):
-    if request.method == method:
+# NewImage  
+@csrf_exempt
+def new_image(request):
+    keys = ["token", "Newimage"]
+    dict = json_from_request(request, 'POST', keys)
+    if dict:
         try:
-            dict = json.loads(request.body)
-            # if "method" in dict.keys() and dict["method"] is not None:
-            #     return dict
-            # else:
-            #     #print("JSON request must contain a 'method' key")
-            #     return None
-            for key in keys:
-                if key not in dict.keys():
-                    return None
-            return dict
+            token = dict["token"]
+            image_raw = dict["Newimage"]
         except:
-            #print("{} is not a JSON request".format(request.body.decode("utf-8")))
-            return None
-    else:
-        #print("Request method is {} but POST expected".format(request.method))
-        return None
+            return HttpResponse("Wrong request", status=400)
+        try:
+            app_user = APPUser.objects.get(token=token)
+            user = app_user.user
+        except:
+            return HttpResponse("Wrong token", status=401)
+        
+        username = user.username
+        image = registration_image_process(image_raw, username)
+        app_user.image = image
+        app_user.save()
 
+        return HttpResponse("Success")
+
+    try:
+        username = request.body.decode("utf-8")
+        filename = os.path.join( os.getcwd(), "data", username+".png" )
+        with open(filename, "rb") as f:
+            data = f.read()
+        return HttpResponse(data)
+    except:
+        return HttpResponse("Wrong token", status=401)
+
+'''
+    Pet unit part
+'''
 # PetLevel  
 @csrf_exempt
 def pet_level(request):
@@ -126,6 +178,9 @@ def pet_level(request):
     level = Pet.objects.get(user=user).level
     return HttpResponse(str(level))
 
+'''
+    Friend unit part
+'''
 # FriendList  
 @csrf_exempt
 def friend_list(request):
@@ -184,9 +239,12 @@ def add_friend(request):
         return HttpResponse("Wrong request", status=400)
 
 
+'''
+    Quest unit part
+'''
+
 QUEST_STATUS = {0: "Completed", 1: "On going", 2: "Out of data"}
 QUEST_DATA_FORMAT = 'End at %Y-%m-%d %H:%M:%S'
-
 
 def check_quest_status(pk, out_date, cur_date):
     if out_date < cur_date:
@@ -257,6 +315,10 @@ def quest_count(request):
 
     return HttpResponse(str(count))
 
+
+'''
+    Location unit part
+'''
 # AddLocationLogJSON 
 @csrf_exempt
 def add_location_log(request):
@@ -304,48 +366,3 @@ def add_location_log(request):
         return HttpResponse("Success")
     else:
         return HttpResponse("Wrong request", status=400)
-
-# UserImage  
-@csrf_exempt
-def user_image(request):
-    try:
-        username = request.body.decode("utf-8")
-        filename = os.path.join( os.getcwd(), "data", username+".png" )
-        with open(filename, "rb") as f:
-            data = f.read()
-        return HttpResponse(data)
-    except:
-        return HttpResponse("Wrong username", status=401)
-
-# NewImage  
-@csrf_exempt
-def new_image(request):
-    keys = ["token", "Newimage"]
-    dict = json_from_request(request, 'POST', keys)
-    if dict:
-        try:
-            token = dict["token"]
-            image_raw = dict["Newimage"]
-        except:
-            return HttpResponse("Wrong request", status=400)
-        try:
-            app_user = APPUser.objects.get(token=token)
-            user = app_user.user
-        except:
-            return HttpResponse("Wrong token", status=401)
-        
-        username = user.username
-        image = registration_image_process(image_raw, username)
-        app_user.image = image
-        app_user.save()
-
-        return HttpResponse("Success")
-
-    try:
-        username = request.body.decode("utf-8")
-        filename = os.path.join( os.getcwd(), "data", username+".png" )
-        with open(filename, "rb") as f:
-            data = f.read()
-        return HttpResponse(data)
-    except:
-        return HttpResponse("Wrong username", status=401)
